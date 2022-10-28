@@ -3,20 +3,10 @@ import 'package:drag_container/drag_container.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(MaterialApp(home: BottomDragWidget(),));
+  runApp(MaterialApp(
+    home: BottomDragWidget(),
+  ));
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 ///上拉抽屉效果
 class BottomDragWidget extends StatefulWidget {
@@ -44,17 +34,59 @@ class BottomDragWidgetState extends State {
       ///页面主体使用层叠布局
       body: Stack(
         children: <Widget>[
-          /// ... ... 页面中其他的视图
-          ///抽屉视图
-          buildDragWidget(),
+          buildDragVerticalWidget(),
+          buildDragHorizontalWidget(),
         ],
+      ),
+    );
+  }
+
+  Widget buildDragHorizontalWidget() {
+    ///层叠布局中的底部对齐
+    return Align(
+      alignment: Alignment.centerRight,
+      child: DragContainer(
+        vertical: false,
+
+        ///抽屉关闭时的高度 默认0.4
+        initChildRate: 0.1,
+
+        ///抽屉打开时的高度 默认0.4
+        maxChildRate: 0.4,
+
+        ///是否显示默认的标题
+        isShowHeader: true,
+
+        ///背景颜色
+        backGroundColor: Colors.white,
+
+        ///背景圆角大小
+        cornerRadius: 12,
+
+        ///自动上滑动或者是下滑的分界值
+        maxOffsetDistance: 1.5,
+
+        // ///抽屉控制器
+        // controller: dragController,
+
+        ///滑动控制器
+        // scrollController: scrollController,
+
+        ///自动滑动的时间
+        duration: Duration(milliseconds: 200),
+
+        ///抽屉的子Widget
+        dragWidget: buildListView(),
+
+        ///抽屉标题点击事件回调
+        dragCallBack: (isOpen) {},
       ),
     );
   }
 
   ///lib/code15/main_data1531.dart
   ///构建底部对齐的抽屉效果视图
-  Widget buildDragWidget() {
+  Widget buildDragVerticalWidget() {
     ///层叠布局中的底部对齐
     return Align(
       alignment: Alignment.bottomCenter,
@@ -84,7 +116,7 @@ class BottomDragWidgetState extends State {
         scrollController: scrollController,
 
         ///自动滑动的时间
-        duration: Duration(milliseconds: 800),
+        duration: Duration(milliseconds: 200),
 
         ///抽屉的子Widget
         dragWidget: buildListView(),

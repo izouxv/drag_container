@@ -32,7 +32,8 @@ class CustomVerticalDragGestureRecognizer
   void addPointer(PointerDownEvent event) {
     super.addPointer(event);
 
-    _velocityTrackers[event.pointer] = VelocityTracker();
+    _velocityTrackers[event.pointer] =
+        VelocityTracker.withKind(PointerDeviceKind.touch);
   }
 
   @override
@@ -61,6 +62,71 @@ class CustomVerticalDragGestureRecognizer
     if (estimate != null && estimate.pixelsPerSecond != null) {
       isFling = estimate.pixelsPerSecond.dy.abs() > minVelocity &&
           estimate.offset.dy.abs() > minDistance;
+    }
+    _velocityTrackers.clear();
+    if (filingListener != null) {
+      filingListener(isFling);
+    }
+
+    ///super.didStopTrackingLastPointer(pointer) 会调用[_handleDragEnd]
+    ///所以将[lingListener(isFling);]放在前一步调用
+    super.didStopTrackingLastPointer(pointer);
+  }
+
+  @override
+  void dispose() {
+    _velocityTrackers.clear();
+    super.dispose();
+  }
+}
+
+///垂直方向的手势识别
+class CustomHorizontalDragGestureRecognizer
+    extends HorizontalDragGestureRecognizer {
+  ///轻扫监听
+  final FilingListener filingListener;
+
+  ///保存手势点的集合
+  final Map<int, VelocityTracker> _velocityTrackers = <int, VelocityTracker>{};
+
+  CustomHorizontalDragGestureRecognizer(
+      {Object? debugOwner, required this.filingListener})
+      : super(debugOwner: debugOwner);
+
+  @override
+  void addPointer(PointerDownEvent event) {
+    super.addPointer(event);
+
+    _velocityTrackers[event.pointer] =
+        VelocityTracker.withKind(PointerDeviceKind.touch);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    super.handleEvent(event);
+    if (!event.synthesized &&
+        (event is PointerDownEvent || event is PointerMoveEvent)) {
+      ///主要用跟踪触摸屏事件（flinging事件和其他gestures手势事件）的速率
+      final VelocityTracker? tracker = _velocityTrackers[event.pointer];
+      assert(tracker != null);
+
+      ///将指定时间的位置添加到跟踪器
+      tracker!.addPosition(event.timeStamp, event.position);
+    }
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    final double minVelocity = minFlingVelocity ?? kMinFlingVelocity;
+    final double minDistance = minFlingDistance ?? kTouchSlop;
+    final VelocityTracker? tracker = _velocityTrackers[pointer];
+
+    ///VelocityEstimate 计算二维速度的
+    final VelocityEstimate? estimate = tracker?.getVelocityEstimate();
+    bool isFling = false;
+    if (estimate != null && estimate.pixelsPerSecond != null) {
+      isFling = estimate.pixelsPerSecond.dx.abs() > minVelocity &&
+          estimate.offset.dx.abs() > minDistance;
     }
     _velocityTrackers.clear();
     if (filingListener != null) {

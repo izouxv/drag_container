@@ -1,8 +1,7 @@
+import 'package:drag_container/drag/custom_recognizer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-
-import 'custom_recognizer.dart';
 import 'drag_controller.dart';
 
 /**
@@ -18,6 +17,8 @@ import 'drag_controller.dart';
 ///抽屉内容Widget
 ///
 class DragContainer extends StatefulWidget {
+  final bool vertical;
+
   ///抽屉主体内容
   final Widget dragWidget;
 
@@ -62,6 +63,7 @@ class DragContainer extends StatefulWidget {
   DragContainer(
       {Key? key,
       required this.dragWidget,
+      this.vertical = true,
       this.initChildRate = 0.1,
       this.maxChildRate = 0.4,
       this.cornerRadius = 12,
@@ -84,7 +86,7 @@ class _DragContainerState extends State<DragContainer>
   late AnimationController animalController;
 
   ///可显示的最大高度 具体的像素
-  double maxChildSize=0;
+  double maxChildSize = 0;
 
   ///默认显示的高度 具体的像素
   double initialChildSize = 0;
@@ -148,13 +150,18 @@ class _DragContainerState extends State<DragContainer>
     ///然后在 State的生命周期里面，这个 mounted 属性不会改变，
     ///直至 framework 调用 State.dispose
     if (mounted) {
+      var maxLength = MediaQuery.of(context).size.height;
+
+      if (!widget.vertical) {
+        maxLength = MediaQuery.of(context).size.width;
+      }
+
       if (maxChildSize == 0) {
         ///计算抽屉可展开的最大值
-        maxChildSize = MediaQuery.of(context).size.height * widget.maxChildRate;
+        maxChildSize = maxLength * widget.maxChildRate;
 
         ///计算抽屉关闭时的高度
-        initialChildSize =
-            MediaQuery.of(context).size.height * widget.initChildRate;
+        initialChildSize = maxLength * widget.initChildRate;
       }
 
       ///计算临界值
@@ -182,24 +189,34 @@ class _DragContainerState extends State<DragContainer>
   Widget build(BuildContext context) {
     ///抽屉视图可偏移的距离限制在
     ///widget.initialChildSize/4 与 widget.maxChildSize 之间
+    print("build offsetDistance1: ${offsetDistance}");
     offsetDistance = offsetDistance.clamp(initialChildSize / 4, maxChildSize);
+
+    print("build offsetDistance2: ${offsetDistance}");
 
     ///平移变换
     return Transform.translate(
       ///在y轴方向移动
-      offset: Offset(0.0, offsetDistance),
+      offset: widget.vertical
+          ? Offset(0.0, offsetDistance)
+          : Offset(offsetDistance, 0.0),
 
       ///手势识别
       child: RawGestureDetector(
         ///自定义手势
-        gestures: {CustomVerticalDragGestureRecognizer: getRecognizer()},
+        gestures: widget.vertical
+            ? {CustomVerticalDragGestureRecognizer: getVerticalRecognizer()}
+            : {
+                CustomHorizontalDragGestureRecognizer: getHorizontalRecognizer()
+              },
         child: Stack(
           children: <Widget>[
             ///限定抽屉的显示的最大高度
             Container(
               ///构建抽屉的内容视图
-              child: buildChild(),
-              height: maxChildSize,
+              child: widget.vertical ? buildYChild() : buildXChild(),
+              height: widget.vertical ? maxChildSize : null,
+              width: !widget.vertical ? maxChildSize : null,
             ),
           ],
         ),
@@ -207,8 +224,120 @@ class _DragContainerState extends State<DragContainer>
     );
   }
 
+  Widget buildXChild() {
+    Widget buildHeader() {
+      ///根据配置来决定是否构建标题
+      if (widget.isShowHeader) {
+        return Column(
+          ///居中
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            InkWell(
+              onTap: () {
+                if (isOpen) {
+                  offsetDistanceClose();
+                } else {
+                  offsetDistanceOpen();
+                }
+                setState(() {});
+              },
+              child: Container(
+                margin: EdgeInsets.all(10),
+                height: 80,
+                width: 6,
+                decoration: BoxDecoration(
+                    color: isOpen ? Colors.blue : Colors.grey,
+                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                    border: Border.all(color: Color(0xFF757575), width: 1.0)),
+              ),
+            )
+          ],
+        );
+      } else {
+        return SizedBox();
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        ///背景颜色设置
+        color: widget.backGroundColor,
+
+        ///只上部分的圆角
+        borderRadius: BorderRadius.only(
+          ///左上角
+          topLeft: Radius.circular(widget.cornerRadius),
+
+          ///右上角
+          bottomLeft: Radius.circular(widget.cornerRadius),
+        ),
+      ),
+
+      ///可滑动的Widget 这里构建的是一个
+      child: Row(
+        children: [
+          ///默认显示的标题横线
+          buildHeader(),
+
+          ///Column中使用滑动视图需要结合
+          ///Expanded填充页面视图
+          Expanded(
+            ///通知（Notification）是Flutter中一个重要的机制，在widget树中，
+            ///每一个节点都可以分发通知，通知会沿着当前节点向上传递，
+            ///所有父节点都可以通过NotificationListener来监听通知
+            child: NotificationListener(
+              ///子Widget中的滚动组件滑动时就会分发滚动通知
+              child: widget.dragWidget,
+
+              ///每当有滑动通知时就会回调此方法
+              onNotification: (Notification notification) {
+                ///滚动处理 用来处理抽屉中的子列表项中的滑动
+                ///与抽屉的联动效果
+                scrollNotificationFunction(notification);
+                return true;
+              },
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   ///lib/code15/drag/drag_container.dart
-  Widget buildChild() {
+  Widget buildYChild() {
+    Widget buildHeader() {
+      ///根据配置来决定是否构建标题
+      if (widget.isShowHeader) {
+        return Row(
+          ///居中
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            InkWell(
+              onTap: () {
+                if (isOpen) {
+                  offsetDistanceClose();
+                } else {
+                  offsetDistanceOpen();
+                }
+                setState(() {});
+              },
+              child: Container(
+                margin: EdgeInsets.all(10),
+                height: 6,
+                width: 80,
+                decoration: BoxDecoration(
+                    color: isOpen ? Colors.blue : Colors.grey,
+                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                    border: Border.all(color: Color(0xFF757575), width: 1.0)),
+              ),
+            )
+          ],
+        );
+      } else {
+        return SizedBox();
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(
         ///背景颜色设置
@@ -385,95 +514,123 @@ class _DragContainerState extends State<DragContainer>
 
   ///lib/code15/drag/drag_container.dart
   ///构建小标题横线
-  Widget buildHeader() {
-    ///根据配置来决定是否构建标题
-    if (widget.isShowHeader) {
-      return Row(
-        ///居中
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          InkWell(
-            onTap: () {
-              if (isOpen) {
-                offsetDistanceClose();
-              } else {
-                offsetDistanceOpen();
-              }
-              setState(() {});
-            },
-            child: Container(
-              margin: EdgeInsets.all(10),
-              height: 6,
-              width: 80,
-              decoration: BoxDecoration(
-                  color: isOpen ? Colors.blue : Colors.grey,
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                  border: Border.all(color: Color(0xFF757575), width: 1.0)),
-            ),
-          )
-        ],
-      );
-    } else {
-      return SizedBox();
-    }
-  }
+  ///
 
-  ///lib/code15/drag/drag_container.dart
-  ///手势识别
-  GestureRecognizerFactoryWithHandlers<CustomVerticalDragGestureRecognizer>
-      getRecognizer() {
+  GestureRecognizerFactoryWithHandlers<CustomHorizontalDragGestureRecognizer>
+      getHorizontalRecognizer() {
+    ///lib/code15/drag/drag_container.dart
+    ///手势识别
+    ///创建自定义手势识别
+    CustomHorizontalDragGestureRecognizer buildCustomGecognizer() {
+      return CustomHorizontalDragGestureRecognizer(
+          filingListener: (bool isFiling) {
+        ///滑动结束的回调
+        ///为true 表示是轻扫手势
+        this.isFiling = false;
+        if (isFiling) {
+          this.isFiling = true;
+        }
+        print("isFling $isFiling");
+      });
+    }
+
+    ///手势识别回调
+    buildCustomGecognizer2(
+        CustomHorizontalDragGestureRecognizer gestureRecognizer) {
+      ///手势回调监听
+      gestureRecognizer
+
+        ///开始拖动回调
+        ..onStart = _handleDragStart
+
+        ///拖动中的回调
+        ..onUpdate = _handleDragUpdate
+
+        ///拖动结束的回调
+        ..onEnd = _handleDragEnd;
+    }
+
     ///手势识别器工厂
     return GestureRecognizerFactoryWithHandlers<
-            CustomVerticalDragGestureRecognizer>(
+        CustomHorizontalDragGestureRecognizer>(
+      ///参数一 自定义手势识别
+      buildCustomGecognizer,
 
-        ///参数一 自定义手势识别
-        buildCustomGecognizer,
-
-        ///参数二 手势识别回调
-        buildCustomGecognizer2);
+      ///参数二 手势识别回调
+      buildCustomGecognizer2,
+    );
   }
 
-  ///创建自定义手势识别
-  CustomVerticalDragGestureRecognizer buildCustomGecognizer() {
-    return CustomVerticalDragGestureRecognizer(filingListener: (bool isFiling) {
-      ///滑动结束的回调
-      ///为true 表示是轻扫手势
-      this.isFiling = isFiling;
-      print("isFling $isFiling");
-    });
-  }
+  GestureRecognizerFactoryWithHandlers<CustomVerticalDragGestureRecognizer>
+      getVerticalRecognizer() {
+    ///lib/code15/drag/drag_container.dart
+    ///手势识别
+    ///创建自定义手势识别
+    CustomVerticalDragGestureRecognizer buildCustomGecognizer() {
+      return CustomVerticalDragGestureRecognizer(
+          filingListener: (bool isFiling) {
+        ///滑动结束的回调
+        ///为true 表示是轻扫手势
+        this.isFiling = false;
+        if (isFiling) {
+          this.isFiling = true;
+        }
+        print("isFling $isFiling");
+      });
+    }
 
-  ///手势识别回调
-  buildCustomGecognizer2(
-      CustomVerticalDragGestureRecognizer gestureRecognizer) {
-    ///手势回调监听
-    gestureRecognizer
+    ///手势识别回调
+    buildCustomGecognizer2(
+        CustomVerticalDragGestureRecognizer gestureRecognizer) {
+      ///手势回调监听
+      gestureRecognizer
 
-      ///开始拖动回调
-      ..onStart = _handleDragStart
+        ///开始拖动回调
+        ..onStart = _handleDragStart
 
-      ///拖动中的回调
-      ..onUpdate = _handleDragUpdate
+        ///拖动中的回调
+        ..onUpdate = _handleDragUpdate
 
-      ///拖动结束的回调
-      ..onEnd = _handleDragEnd;
+        ///拖动结束的回调
+        ..onEnd = _handleDragEnd;
+    }
+
+    ///手势识别器工厂
+    return GestureRecognizerFactoryWithHandlers<
+        CustomVerticalDragGestureRecognizer>(
+      ///参数一 自定义手势识别
+      buildCustomGecognizer,
+
+      ///参数二 手势识别回调
+      buildCustomGecognizer2,
+    );
   }
 
   ///手指开始拖动时
   void _handleDragStart(DragStartDetails details) {
     ///更新标识为普通滑动
     isFiling = false;
+
+    print("drag start ${details.localPosition.dy}");
   }
 
   ///手势拖动抽屉时移动抽屉的位置
   void _handleDragUpdate(DragUpdateDetails details) {
     ///偏移量累加
-    offsetDistance = offsetDistance + details.delta.dy;
+    print(
+        "drag update localPosition x: ${details.localPosition.dx}, y: ${details.localPosition.dy}");
+    print("drag update delta x: ${details.delta.dx}, y: ${details.delta.dy}");
+    offsetDistance = offsetDistance +
+        (widget.vertical ? details.delta.dy : details.delta.dx);
+    print(
+        "drag update x: ${details.localPosition.dx}, y: ${details.localPosition.dy}, offsetDistance: ${offsetDistance}");
     setState(() {});
   }
 
   ///当拖拽结束时调用
   void _handleDragEnd(DragEndDetails details) {
+    print("drag end  ");
+
     ///当快速滑动时[isFiling]为true
     if (isFiling) {
       ///当前抽屉是关闭状态时打开
